@@ -2,6 +2,13 @@
 # mcp-termux 幂等启动 + 生命周期看门狗
 # 用法: ensure.sh [HOST_PID]
 DIR=/data/adb/mcp_re_v6
+# The binary resolves TERMUX_PREFIX itself, but the compatibility symlink at
+# /data/data/com.termux/files/usr can win before the app-private prefix.
+# Point it at the real owner so PATH and termux_command use that identity.
+if [ -z "${MCP_TERMUX_PREFIX:-}" ] && [ -L /data/data/com.termux/files/usr ]; then
+    _real=$(readlink -f /data/data/com.termux/files/usr 2>/dev/null)
+    [ -n "$_real" ] && export MCP_TERMUX_PREFIX="$_real"
+fi
 HOST_PID="$1"
 
 # 回收旧看门狗（Host 重启时由新实例接管）

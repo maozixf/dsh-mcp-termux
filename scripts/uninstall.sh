@@ -40,10 +40,19 @@ run() { if [ "$DRY" = 1 ]; then echo "  would: $*"; else "$@"; fi }
 
 [ "$(id -u)" = 0 ] || { echo "需要 root：su -c \"sh $0\"" >&2; exit 1; }
 
-# 只在“插件包已不在”时继续；供插件 dispose 延时调用，避免正常退出时误清
-if [ -n "$IF_ORPHAN_PKG" ] && [ -e "$IF_ORPHAN_PKG/package.json" ]; then
-  say "plugin still installed at $IF_ORPHAN_PKG — nothing to do"
-  exit 0
+# 只在“插件包已不在”时继续；供插件 dispose 调用。
+# 卸载是「先 unload 再 pnpm remove」，dispose 可能早于包被删掉，所以这里轮询等待，
+# 而不是一次判断就放弃；超时仍存在则视为“只是正常退出”，不做任何删除。
+if [ -n "$IF_ORPHAN_PKG" ]; then
+  n=0
+  while [ -e "$IF_ORPHAN_PKG/package.json" ] && [ "$n" -lt 60 ]; do
+    sleep 1; n=$((n + 1))
+  done
+  if [ -e "$IF_ORPHAN_PKG/package.json" ]; then
+    say "plugin still installed after 60s — nothing to do"
+    exit 0
+  fi
+  say "package removed — starting cleanup"
 fi
 
 say "stopping processes"

@@ -103,3 +103,54 @@ su -c "pkill -x mcp; pkill -x mcp_boot; rm -rf /data/adb/mcp_re_v6"
 ## 许可
 
 插件层代码为 MIT。上游 mcp-termux、radare2、stackplz、paradise 各自遵循其原有许可。
+
+## 卸载与清理（点“卸载”即全清）
+
+插件在 `dispose` 时做两件事：
+
+1. 立即停掉 `mcp` / `mcp_boot`（原来就有）；
+2. **延时 8 秒**后再执行一次根侧检查：如果插件包目录已经消失（也就是你真的卸载了），就调用
+   `/data/adb/mcp_re_v6/uninstall.sh` 做全量清理。正常退出 DSH 时插件包还在，检查会直接跳过，不会误删。
+
+清理范围（`scripts/uninstall.sh`）：
+
+| 项目 | 处理 |
+|---|---|
+| `mcp` / `mcp_boot` / watchdog / stackplz 子进程 | 全部结束 |
+| `paradise` 内核模块 | 已加载则 `rmmod`（失败会提示“重启后清除”） |
+| `prefix-manifest.txt` 里登记的符号链接 | 按清单删除 |
+| 部署目录 `/data/adb/mcp_re_v6` | `rm -rf` |
+| `/data/data/com.termux` 兼容软链 | 仅当它确实指向某个 `files/usr` / `files/home` 时删除 |
+
+**不清理**：jadx / openjdk 等通用工具、你自己的文件、其它应用数据。
+
+手动执行（不装插件也能用）：
+
+```sh
+su -c "sh /data/adb/mcp_re_v6/uninstall.sh --dry-run"   # 先看会删什么
+su -c "sh /data/adb/mcp_re_v6/uninstall.sh"             # 真删
+```
+
+## DSH 路径适配（v1.1 起不再依赖 `/data/data/com.termux`）
+
+旧版把 Termux 前缀写死在二进制里（`/data/data/com.termux/files/usr`），所以在没有 Termux 的设备上必须造一个同名兼容软链，`termux_command` 还会因为写死 uid `10520` 而失效。
+
+v1.1 的源码改为**启动时解析前缀**（`src/mcp_termux_v7.cpp`）：
+
+1. `MCP_TERMUX_PREFIX` 环境变量（最高优先级）；
+2. `$PREFIX`（且其 `bin/bash` 可执行）；
+3. 真实 Termux 目录；
+4. 第一个 `"/data/data/*/files/usr/bin/bash"` 命中的应用私有 prefix（DSH 就命中这一条）；
+5. 都没有 → 回退到 Termux 默认路径。
+
+`termux_command` 的身份也随之合理：前缀是 Termux 时用 `10520`，其它前缀（没有这个用户）用 `0`，并可用 `MCP_TERMUX_UID` 覆盖。
+
+实测（本机 DSH，aarch64，无 Termux）：
+
+```
+Termux prefix: /data/data/com.dsharnessmobile.shell/files/usr
+shell_exec  → PATH 直接指向该 prefix，r2 / python 可用
+termux_command → uid=0，python3 3.14.8
+```
+
+因此 `deploy/mcp` 现在是**用源码重新编译**的版本；仓库不再需要等长字符串补丁。

@@ -1,0 +1,36 @@
+{
+  "name": "dsh-mcp-termux",
+  "version": "1.0.0",
+  "description": "MCP Termux (73 reverse-engineering tools) as a DSH plugin: deploys the root server, starts it with DSH and stops it when DSH exits. Requires Android aarch64 + root.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "mcp",
+    "reverse-engineering",
+    "android",
+    "frida",
+    "radare2"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "locale",
+    "cordis.patch.yml",
+    "README.dsh.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

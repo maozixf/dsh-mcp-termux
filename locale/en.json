@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP Termux",
+    "description": "Deploys and runs the mcp-termux root server (73 reverse-engineering tools: eBPF tracing, memory R/W, radare2) together with DSH. Requires Android aarch64 + root."
+  }
+}

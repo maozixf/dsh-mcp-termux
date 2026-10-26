@@ -154,3 +154,7 @@ termux_command → uid=0，python3 3.14.8
 ```
 
 因此 `deploy/mcp` 现在是**用源码重新编译**的版本；仓库不再需要等长字符串补丁。
+> 如果设备上仍存在旧版创建的 `/data/data/com.termux/files/usr` 兼容软链，启动脚本会先
+> `readlink -f` 它并导出 `MCP_TERMUX_PREFIX`，确保 PATH 与 `termux_command` 用的是
+> 真实所有者前缀，而不是软链本身。
+

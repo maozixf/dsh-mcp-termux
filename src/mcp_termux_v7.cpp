@@ -39,11 +39,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/utsname.h>
+#include <glob.h>
 using json = nlohmann::json;
 
 /* ══════════ CONSTANTS ══════════ */
 static const char* VERSION = "7.0.0";
 static const char* PROTO_VER = "2024-11-05";
+/* Resolved at startup (resolve_termux_paths) so the same binary works under
+ * Termux, a DSH-bundled userland, or any app-private copy of it. */
+static std::string g_prefix_store, g_home_store, g_tmp_store, g_bash_store;
 static const char* TERMUX_PREFIX = "/data/data/com.termux/files/usr";
 static const char* TERMUX_HOME = "/data/data/com.termux/files/home";
 static const char* TERMUX_TMP = "/data/data/com.termux/files/usr/tmp";
@@ -3274,12 +3278,17 @@ static json run_tool(const std::string& nm, const json& a, const Config& cfg,
         if (command.empty()) return terr("command required");
         int timeout = std::min(a.value("timeout", 30), 300);
         // Run as Termux user
-        std::string uid = "10520";  // Termux UID
-        std::string full = "su " + uid + " -c 'export HOME=/data/data/com.termux/files/home "
-            "PREFIX=/data/data/com.termux/files/usr "
-            "PATH=/data/data/com.termux/files/usr/bin:$PATH "
-            "LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib "
-            "TMPDIR=/data/data/com.termux/files/home/.tmp; "
+        // Termux ships uid 10520; another app's private userland has no such
+        // user, so fall back to 0 (root) unless MCP_TERMUX_UID overrides it.
+        const char* uid_env = getenv("MCP_TERMUX_UID");
+        std::string uid = (uid_env && *uid_env)
+            ? std::string(uid_env)
+            : (g_prefix_store == "/data/data/com.termux/files/usr" ? std::string("10520") : std::string("0"));
+        std::string full = "su " + uid + " -c 'export HOME=" + std::string(TERMUX_HOME) + " "
+            "PREFIX=" + std::string(TERMUX_PREFIX) + " "
+            "PATH=" + std::string(TERMUX_PREFIX) + "/bin:$PATH "
+            "LD_LIBRARY_PATH=" + std::string(TERMUX_PREFIX) + "/lib "
+            "TMPDIR=" + std::string(TERMUX_HOME) + "/.tmp; "
             "mkdir -p $TMPDIR; " + sq_esc(command) + "' 2>&1";
         auto r = run_root_cmd(full, timeout, cfg.max_out);
         return tjson({{"exit_code", r.exit_code}, {"output", r.out + r.err}, {"timed_out", r.timed_out}});
@@ -3380,7 +3389,54 @@ static json handle_rpc(const json& req, const Config& cfg, const std::string& si
 /* ══════════ MAIN ══════════ */
 static httplib::Server* g_svr_ptr = nullptr;
 
+static bool _is_exec_file(const std::string& p) { return access(p.c_str(), X_OK) == 0; }
+
+/* Prefer an explicit override, then $PREFIX, then a real Termux install, then
+ * the first app-private Termux-like userland that has bin/bash. */
+static std::string detect_termux_prefix() {
+    const char* env_override = getenv("MCP_TERMUX_PREFIX");
+    if (env_override && *env_override) return std::string(env_override);
+    const char* env_prefix = getenv("PREFIX");
+    if (env_prefix && *env_prefix && _is_exec_file(std::string(env_prefix) + "/bin/bash"))
+        return std::string(env_prefix);
+    const std::string termux = "/data/data/com.termux/files/usr";
+    if (_is_exec_file(termux + "/bin/bash")) return termux;
+    glob_t g{};
+    if (glob("/data/data/*/files/usr/bin/bash", 0, nullptr, &g) == 0) {
+        std::string hit;
+        for (size_t i = 0; i < g.gl_pathc; i++) {
+            std::string cand(g.gl_pathv[i]);
+            const std::string suffix = "/bin/bash";
+            if (cand.size() > suffix.size() &&
+                cand.compare(cand.size() - suffix.size(), suffix.size(), suffix) == 0) {
+                hit = cand.substr(0, cand.size() - suffix.size());
+                break;
+            }
+        }
+        globfree(&g);
+        if (!hit.empty()) return hit;
+    }
+    return termux;
+}
+
+static void resolve_termux_paths() {
+    g_prefix_store = detect_termux_prefix();
+    std::string home = g_prefix_store;
+    if (home.size() > 4 && home.compare(home.size() - 4, 4, "/usr") == 0)
+        home.replace(home.size() - 4, 4, "/home");
+    else
+        home += "/home";
+    g_home_store = home;
+    g_tmp_store = g_prefix_store + "/tmp";
+    g_bash_store = g_prefix_store + "/bin/bash";
+    TERMUX_PREFIX = g_prefix_store.c_str();
+    TERMUX_HOME = g_home_store.c_str();
+    TERMUX_TMP = g_tmp_store.c_str();
+    TERMUX_BASH = g_bash_store.c_str();
+}
+
 int main(int argc, char* argv[]) {
+    resolve_termux_paths();
     // ── Init self directory (for relative paths) ──
     g_self_dir = get_self_dir();
     LOGI("Main", "Base directory: " + g_self_dir);

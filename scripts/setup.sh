@@ -37,9 +37,10 @@ fi
 
 # 2. 解压 + 部署二进制（先停掉在跑的实例，否则 Text file busy）
 echo "[2/6] 部署到 $DIR ..."
-pkill -x mcp 2>/dev/null
-pkill -x mcp_boot 2>/dev/null
-sleep 1
+# 强杀可能仍在运行的实例：cp 覆盖正在执行的二进制会报 Text file busy
+pkill -9 -x mcp 2>/dev/null
+pkill -9 -x mcp_boot 2>/dev/null
+sleep 2
 mkdir -p "$DIR"
 if [ -d "$PKG_DIR/deploy" ]; then
     cp -r "$PKG_DIR/deploy/." "$DIR/" || { echo "复制失败" >&2; exit 1; }

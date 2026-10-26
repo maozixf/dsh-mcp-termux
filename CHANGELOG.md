@@ -21,6 +21,7 @@
 ### 修复
 
 - 重启后 `termux_command` 偶发回退到 uid `10520`、`python3` 不可用（前缀被兼容软链抢先匹配）。
+- 从仓库部署时，radare2 的相对符号链接（`libr_*.so` → `libr_*.so.6.1.0`、`r2`/`r2p` → `radare2`）在 git/zip 传输中丢失，导致 r2 系列工具报 `CANNOT LINK ... libr_cons.so`；`setup.sh` 现在部署后自动重建这些链接。
 
 ## [1.0.1] - 2026-10-26
 

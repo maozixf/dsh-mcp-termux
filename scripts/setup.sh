@@ -3,6 +3,15 @@
 # 用法: su -c "sh <插件目录>/scripts/setup.sh"
 set -u
 
+# su/root 环境可能没有 DSH 的 LD_LIBRARY_PATH，而 Termux 前缀工具
+# （dirname/id/curl 等）的 RUNPATH 指向 /data/data/com.termux/files/usr/lib。
+# 先补一条库路径，避免在干净的 root 环境里误判“不是 root”。
+if [ -z "${LD_LIBRARY_PATH:-}" ]; then
+    for _lib in /data/data/com.termux/files/usr/lib /data/data/*/files/usr/lib; do
+        if [ -d "$_lib" ]; then LD_LIBRARY_PATH="$_lib"; export LD_LIBRARY_PATH; break; fi
+    done
+fi
+
 SELF_DIR=$(cd "$(dirname "$0")" && pwd)
 PKG_DIR=$(dirname "$SELF_DIR")
 DIR=/data/adb/mcp_re_v6

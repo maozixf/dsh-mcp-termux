@@ -4,9 +4,22 @@
 
 上游服务端（73 个 Android 逆向工具）完整保留在 `deploy/`、`src/`、`docs/`；插件层加在根目录，让 DSH 能部署、挂载并管理它。
 
+## ⚠️ 先看门槛
+
+**不满足以下条件的设备，装了也用不了，请不要安装：**
+
+| 条件 | 说明 | 不满足的后果 |
+|---|---|---|
+| **Root** | KernelSU 或 Magisk，且**已授权 DSH 应用使用 su** | 无法部署、无法启动服务，全部工具不可用 |
+| **架构** | 仅 aarch64（arm64） | x86 设备直接不可用 |
+| **内核** | 5.10 / 5.15 / 6.1 / 6.6 / 6.12（仓库自带对应 `.ko`） | 内核模块加载失败，内存类工具不可用 |
+| **Termux** | 设备上要有 Termux 的 `lib/libc++_shared.so` | `setup.sh` 找不到该库会直接退出 |
+
+没有 root 的话，这个插件没有任何可用功能——它**不是**纯静态分析器，核心能力（eBPF 追踪、内存读写）全部依赖 root。
+
 ## 能给你什么
 
-安装后 DSH 的工具列表里会出现 `mcp-termux_*`（共 73 个），包括：
+满足条件后，DSH 的工具列表里会出现 `mcp-termux_*`（共 73 个）：
 
 | 类别 | 代表工具 |
 |---|---|
@@ -16,28 +29,30 @@
 | root 文件 / 进程 | `shell_exec`、`os_read_file`、`process_list` |
 | 高级分析 | `find_jni_methods`、`scan_crypto_signatures`、`symbolic_deobfuscate` |
 
-## 前提条件
-
-| 条件 | 说明 |
-|---|---|
-| **Root** | paradise 需要 insmod 内核模块，stackplz 需要 eBPF；无 root 时大部分工具不可用 |
-| **架构** | 仅 aarch64（arm64） |
-| **内核** | 随包提供 5.10 / 5.15 / 6.1 / 6.6 / 6.12 的 `.ko`，不匹配则内存类工具不可用 |
-| **curl** | 仅当仓库内 `deploy/` 缺失时才需要下载 |
-
-## 安装
+## 安装（一条命令）
 
 ```bash
-# 1. 安装插件
-dsh plugin --profile web add github:maozixf/mcp-termux
-
-# 2. 首次部署（需要 root，约 90 MB 部署体积）
-su -c "sh ~/.dsh/profiles/web/node_modules/dsh-mcp-termux/scripts/setup.sh"
-
-# 3. 重启 DSH
+dsh plugin --profile web add github:maozixf/dsh-mcp-termux
 ```
 
-`setup.sh` 直接使用本仓库自带的 `deploy/` 目录，**不会额外下载** 90 MB 上游压缩包。
+然后**重启 DSH**。首次启动时插件会在后台自动部署：
+
+1. 检测到 `/data/adb/mcp_re_v6/ensure.sh` 不存在 → 用 `su` 执行 `scripts/setup.sh`
+2. 从本仓库自带的 `deploy/` 复制二进制（**不额外下载** 90 MB）
+3. 服务启动后，`mcp-client` 靠退避重试自动连上（重试窗口约 20 分钟）
+4. 工具列表出现 `mcp-termux_*`
+
+部署期间工具暂时不可见，属于正常现象。查看进度：
+
+```bash
+su -c "tail -f /data/adb/mcp_re_v6/mcp.log"
+```
+
+**如果自动部署失败**（没 root、KernelSU 未授权、找不到 `libc++_shared.so`），手动补一次：
+
+```bash
+su -c "sh ~/.dsh/profiles/web/node_modules/dsh-mcp-termux/scripts/setup.sh"
+```
 
 ## 生命周期
 
@@ -53,7 +68,7 @@ su -c "sh ~/.dsh/profiles/web/node_modules/dsh-mcp-termux/scripts/setup.sh"
 |---|---|
 | `package.json` | 插件清单（`dsh.bundle.patch`） |
 | `cordis.patch.yml` | 挂载 73 个工具为 `mcp-termux_*`，并插入生命周期行 |
-| `lib/index.js` | 启动 / dispose / 传递 Host pid |
+| `lib/index.js` | 首次部署、启动、dispose、传递 Host pid |
 | `scripts/setup.sh` | 从 `deploy/` 部署，修 libc++ 与 Termux 路径 |
 | `scripts/ensure.sh` | 幂等启动 + 武装看门狗 |
 | `scripts/watchdog.sh` | Host 进程消失后停止服务 |

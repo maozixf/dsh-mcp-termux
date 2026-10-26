@@ -51,6 +51,18 @@ else
 fi
 chmod 755 "$DIR/mcp" "$DIR/mcp_boot" "$DIR/stackplz" "$DIR/paradise" 2>/dev/null
 chmod 755 "$DIR/radare2/bin/"* 2>/dev/null
+# 2b. 修复相对符号链接：git/zip 传输常丢 symlink，r2 依赖 libr_X.so -> libr_X.so.6.1.0
+echo "[2b/6] 修复 radare2 符号链接 ..."
+if [ -d "$DIR/radare2/lib" ]; then
+    ( cd "$DIR/radare2/lib" && for f in *.so.6.1.0; do
+        [ -e "$f" ] || continue
+        ln -sf "$f" "${f%.0}"
+        ln -sf "$f" "${f%.6.1.0}"
+      done )
+fi
+for b in r2 r2p; do
+    [ -e "$DIR/radare2/bin/$b" ] || ln -sf radare2 "$DIR/radare2/bin/$b"
+done
 
 # 3. 补 libc++_shared.so（原包只带不兼容的 libc++.so，缺 __ndk1 符号）
 echo "[3/6] 准备 libc++_shared.so ..."

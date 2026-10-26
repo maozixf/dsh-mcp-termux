@@ -1,5 +1,5 @@
 # Two rows, ordered:
-#   1. lifecycle  — starts/stops the external root server (must run before the client connects)
+#   1. lifecycle  — deploys on first boot, then starts/stops the external root server
 #   2. client     — mounts the server's tools as mcp-termux_* through the official MCP client
 # failOnStartupError:false keeps a not-yet-deployed server from failing the whole Host boot;
 # the client row retries with backoff and registers tools once the port answers.
@@ -13,3 +13,7 @@
         transport: streamable-http
         url: http://127.0.0.1:65534/mcp
         failOnStartupError: false
+        # 首次启动可能正在后台部署，放宽重试窗口（默认 10 次约 2 分钟不够）
+        reconnect:
+          maxAttempts: 40
+          maxDelayMs: 30000

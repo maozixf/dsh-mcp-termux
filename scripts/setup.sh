@@ -98,7 +98,8 @@ fi
 echo "[5/6] 安装启停脚本 ..."
 cp "$SELF_DIR/ensure.sh" "$DIR/ensure.sh"
 cp "$SELF_DIR/watchdog.sh" "$DIR/watchdog.sh"
-chmod 755 "$DIR/ensure.sh" "$DIR/watchdog.sh"
+cp "$SELF_DIR/uninstall.sh" "$DIR/uninstall.sh"
+chmod 755 "$DIR/ensure.sh" "$DIR/watchdog.sh" "$DIR/uninstall.sh"
 
 # 6. 启动 + 自检
 echo "[6/6] 启动并自检 ..."
@@ -111,6 +112,8 @@ if curl -s -m 5 http://127.0.0.1:65534/health | grep -q '"status":"ok"'; then
     echo "=== 部署成功 ==="
     echo "服务: http://127.0.0.1:65534/mcp"
     echo "下一步: 重启 DSH，插件会自动接管启停并挂载工具。"
+    echo "卸载: 在 DSH 插件管理器点“卸载”即可；dispose 会延时调用"
+    echo "      $DIR/uninstall.sh 做全量清理（进程/内核模块/目录/兼容软链）。"
 else
     echo "健康检查失败，查看 $DIR/mcp.log 排查：" >&2
     tail -15 "$DIR/mcp.log" 2>/dev/null >&2
